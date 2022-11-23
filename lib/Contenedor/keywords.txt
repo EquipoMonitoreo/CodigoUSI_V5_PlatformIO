@@ -1,0 +1,25 @@
+#######################################
+# Syntax Coloring Map Contenedor
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+Contenedor	KEYWORD1	Contenedor
+Info	KEYWORD1	Info
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+SIM_reset	KEYWORD2
+SIM_Initialize	KEYWORD2
+enviarInfo	KEYWORD2
+updateDate	KEYWORD2
+sampleMinute	KEYWORD2
+sampleHour	KEYWORD2
+info	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
