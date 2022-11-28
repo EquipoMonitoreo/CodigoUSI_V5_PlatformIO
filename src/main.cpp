@@ -4,6 +4,9 @@
  *  Version 5 programa integrado USI. Utilizando entorno Visual Studio (PlatformIO)
  *  
  *  Incluye display color tft touch 2.4"
+ * 
+ *  CAMBIOS A REALIZAR:
+ *    - Añadir deteccion de posicion tapa con sensor hall antes de liberar solenoide cerradura.
  *  
  */
 
