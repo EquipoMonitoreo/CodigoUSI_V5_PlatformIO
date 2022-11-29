@@ -6,7 +6,8 @@
  *  Incluye display color tft touch 2.4"
  * 
  *  CAMBIOS A REALIZAR:
- *    - Añadir deteccion de posicion tapa con sensor hall antes de liberar solenoide cerradura.
+ *    - Añadir deteccion de posicion tapa con sensor hall antes de liberar solenoide cerradura. Usar sensor hall A44E con pullup externo (10k)
+ *    - Añadir pulsador a pin INT - dentro de subrutina levantar bandera 'flagTouch'
  *  
  */
 
@@ -74,6 +75,10 @@ const byte pinLock = 35;          // Cerradura - solenoide
 const byte statusLed = 33;        // Led indicador de estado.
 //Sensor magnetico apertura:
 const byte pinDoor = 19;
+//Sensor Hall tapa ingreso botellas:
+const byte doorHallPin = 27;
+//Pulsador para incio ingreso botellas:
+const byte pulsadorInicio = 18;
 
 //------ Declaracion Variables Globales ------
 String URLString = "https://monitoreoambiental.sanjuan.gob.ar/api/62d01da68401a5082fbfd8f3/00/";    // EDITAR ACA URL INTEGRACION. USI Tecnopolis
@@ -85,7 +90,7 @@ unsigned int timerCount = 0;
 
 bool flagShowCode = false;
 
-uint16_t contBotellas = 0;      //Contador de botellas ingresadas por usuario.
+uint16_t contBotellas = 0;      // Contador de botellas ingresadas por usuario.
 
 char resultCode[8];             // Variable global que almacena el codigo a mostrar por pantalla
 
@@ -99,12 +104,12 @@ uint8_t cantIntentos = 0;
 
 unsigned long lastTimeBlink = 0;
 
-int eeAddress = 0;              //Direccion memoria EEPROM.
+int eeAddress = 0;              // Direccion memoria EEPROM.
 
 float m, b;
 
 bool flagDoor = false;
-//bool contenedorLleno = false;
+bool flagLleno = false;         // Bandera para habilitar pulsador inicio ingreso botellas
 
 //------ Declarar Objetos ------
 NewPing sonar(pinUS_trigger, pinUS_echo, 200);
@@ -113,7 +118,7 @@ SIM808 sim808(RST, PWR);
 Contenedor ambiente(&sim808, &SIM, URLString, Serial);      // Crea objeto 'ambiente' de la clase Contenedor.
 
 //------ Declaracion Subrutinas ------
-//void updateTime();    // Subrutina Timer3
+//void updateTime();    // Subrutina Timer3   (esta predefinicion no es necesaria.)
 
 
 //-------------------------- Funciones pantalla --------------------------
@@ -393,7 +398,7 @@ bool sendAttempt(){
   Serial.print("Enviando datos a: "); Serial.println(URLString);    // Enviar datos.
   ambiente.updateDate();                                            // Actualizar fecha y hora.
   Serial.println(ambiente.timeStamp);                               // Mostrar estampa de tiempo actualizada.
-  result = ambiente.enviarInfo();                              // Ejecutar envío.
+  result = ambiente.enviarInfo();                                   // Ejecutar envío.
   Serial.print("Estado Envío: "); Serial.println(result);
 
   return result;
@@ -430,6 +435,27 @@ void readClearEEPROM(){
   }
 }
 
+void closeDoor(){
+
+  while(true){
+
+    if(digitalRead(doorHallPin) == LOW){
+      Serial.println("Espera balanceo...");
+      delay(DELAY_CIERRE);
+
+      if(digitalRead(doorHallPin) == LOW){
+        digitalWrite(pinLock, HIGH); // Cerrar pestillo
+        Serial.println("Cerrado");
+        break;
+      }
+    }
+
+    // Añadir time out por si nunca detecta cierre ??? REVISAR! 
+
+  }
+  
+}
+
 //-------------------------- Subrutinas Interrupcion --------------------------
 void ISR_IR1(){
   IR1_act = true;
@@ -446,7 +472,13 @@ void ISR_Puerta(){
   flagDoor = true;
 }
 
-void updateTime(){
+void ISR_inicio(){
+  if(!flagLleno){
+    flagTouch = true;
+  }
+}
+
+void updateTime(){      // Subrutina Timer3
   
   timerCount++;
   
@@ -474,7 +506,7 @@ void setup() {
   showmsgXY(0, 30, 2, NULL, "Configurando...", RED);
   progressBar(0, 60);
 
-  // Configurando pines
+  // Configurando pines:
   pinMode(pinLock, OUTPUT);                // Ctrl cerradura (solenoide).
   digitalWrite(pinLock, HIGH);            // HIGH = Rele en descanso (Cerrado); LOW = Acciona rele (Abierto)
   
@@ -484,14 +516,18 @@ void setup() {
   pinMode(pinLedRojo, OUTPUT);            // Ctrl tira leds.
   digitalWrite(pinLedRojo, LOW);
 
-  pinMode(statusLed, OUTPUT);         // Led estado
+  pinMode(statusLed, OUTPUT);             // Led estado
   digitalWrite(statusLed, LOW);
 
-  pinMode(pinDoor, INPUT_PULLUP);     // pin sensor magnetico puerta
+  pinMode(pinDoor, INPUT_PULLUP);         // pin sensor magnetico puerta
 
-  pinMode(eepromPin, INPUT_PULLUP);
+  pinMode(eepromPin, INPUT_PULLUP);       // pin para reset de memoria eeprom
 
-  // Ultrasonido
+  pinMode(doorHallPin, INPUT_PULLUP);     // pin sensor Hall para detectar posicion de tapa.
+
+  pinMode(pulsadorInicio, INPUT_PULLUP);  // pin pulsador inicio ingreso botellas (Funciona en paralelo con touchScreen)
+
+  // Ultrasonido:
   pinMode(pinUS_trigger, OUTPUT);     //pin como salida
   pinMode(pinUS_echo, INPUT);         //pin como entrada
   digitalWrite(pinUS_trigger, LOW);   //Inicializamos el pin con 0
@@ -501,14 +537,16 @@ void setup() {
   pinMode(RST, OUTPUT);               // pin RST SIM808
   pinMode(PWR, OUTPUT);               // pin encendido PWR SIM808
 
-  // Habilitar interrupciones
+  // Habilitar interrupciones:
   attachInterrupt(digitalPinToInterrupt(pinIR1), ISR_IR1, RISING);
   //pinMode(pinIR1, INPUT);         // Probando otra logica de deteccion botellas: Si IR1 HIGH y INT RISING cuenta
   attachInterrupt(digitalPinToInterrupt(pinIR2), ISR_IR2, RISING);
 
   attachInterrupt(digitalPinToInterrupt(pinDoor), ISR_Puerta, FALLING);
 
-  // Iniciar SIM808
+  attachInterrupt(digitalPinToInterrupt(pulsadorInicio), ISR_inicio, FALLING);
+
+  // Iniciar SIM808:
   Serial.print("Iniciando SIM808...");
   simStatus = ambiente.SIM_Initialize();
   Serial.print("SIM Status: "); Serial.println(simStatus);
@@ -516,7 +554,7 @@ void setup() {
 
   digitalWrite(statusLed, HIGH);
 
-  // Setup Timer
+  // Setup Timer:
   Timer3.initialize(5000000);               // Establecer en ms. Iniciar timer con periodo de 5 seg.
   Timer3.attachInterrupt(updateTime);       // Subrutina interrupcion.
   Timer3.stop();                            // Detener Timer.
@@ -550,17 +588,14 @@ void loop() {
     lastTimeBlink = millis();
   }
 
-//  if(digitalRead(pinDoor)==HIGH){    // Puerta abierta ??
-//    Serial.println("Puerta abierta");
-//    
-//  }
-
-  // consultar variable nivel de llenado
+  // consultar variable nivel de llenado - REVISAR! cuando se añada el pulsador en paralelo con touchScreen. Agregar bandera que habilite ???
   if(ambiente.info.nivel < LIMITE_LLENADO){
-    readTouchScreen();    // Polling touch pantalla
+    readTouchScreen();                // Polling touch pantalla
+    flagLleno = false;                 // Bandera para habilitar pulsador
   }else{
-    digitalWrite(pinLedRojo, LOW);  // Encender Led rojo
+    digitalWrite(pinLedRojo, LOW);    // Encender Led rojo
     digitalWrite(pinLedVerde, HIGH);  // Apagar Led verde
+    flagLleno = true;
   }
 
   if(flagTouch && !flagShowCode){
@@ -638,7 +673,10 @@ void loop() {
         pantallaPrincipal(ambiente.info.nivel, ambiente.info.cantBotellas, simStatus);
 
         digitalWrite(pinLedRojo, LOW);   // Encender Led Rojo
-        digitalWrite(pinLock, HIGH);      // Bloquear ingreso
+
+        // Bloquear ingreso - Acá chequear sensor Hall antes de cerrar:
+        //digitalWrite(pinLock, HIGH);
+        closeDoor();
 
         break;
       }
@@ -683,8 +721,11 @@ void loop() {
           pantallaPrincipal(ambiente.info.nivel, ambiente.info.cantBotellas, simStatus);
         }
 
-        digitalWrite(pinLedRojo, LOW);  // Encender Led Rojo
-        digitalWrite(pinLock, HIGH);      // Bloquear ingreso
+        digitalWrite(pinLedRojo, LOW);    // Encender Led Rojo
+
+        // Bloquear ingreso - Acá chequear sensor Hall antes de cerrar:
+        //digitalWrite(pinLock, HIGH);
+        closeDoor();
 
         // Realizar intento de envio GPRS
         //estadoEnvio = sendAttempt();

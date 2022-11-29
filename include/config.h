@@ -10,6 +10,7 @@
 #define BLINKTIME       500          // Periodo parpadeo led estado.
 #define LIMITE_LLENADO  95           // Porcentaje de llenado
 //#define TPO_DISPLAY   1500         // Tiempo retardo display en ms.
+#define DELAY_CIERRE    3000         // Espera en ms para cerrar/bloquear tapa
 
 #define UBICACION     "XC"         // Definir 2 caracteres fijos para la ubicacion de la USI.
 
