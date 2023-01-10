@@ -5,9 +5,9 @@
  *  
  *  Incluye display color tft touch 2.4"
  * 
- *  CAMBIOS A REALIZAR:
- *    - Añadir deteccion de posicion tapa con sensor hall antes de liberar solenoide cerradura. Usar sensor hall A44E con pullup externo (10k)
- *    - Añadir pulsador a pin INT - dentro de subrutina levantar bandera 'flagTouch'
+ *  PROBANDO LOS SIGUIENTES CAMBIOS:
+ *    - Deteccion de posicion tapa con sensor hall antes de liberar solenoide cerradura. Usando sensor hall A44E con pullup externo (10k)
+ *    - Pulsador a pin INT - dentro de subrutina levanta bandera 'flagTouch'
  *  
  */
 
@@ -305,7 +305,7 @@ char* codeGenerator(uint16_t nroBotellas){
 
   strBuffer = UBICACION;
 
-  // PROBAR: Codificar 256-nroBotellas. Por Ej: nroBotellas = 3; 256-3 = 253; en HEX = FD
+  // PROBAR: Codificar 255-nroBotellas. Por Ej: nroBotellas = 3; 255-3 = 252; en HEX = FC
   
   if (nroBotellas >= 0 && nroBotellas <= 15) {
       aux = String(nroBotellas, HEX);
@@ -435,17 +435,17 @@ void readClearEEPROM(){
   }
 }
 
-void closeDoor(){
+void closeDoor(){     // Funcion para esperar que la tapa este en posicion antes de bloquear ingreso
 
   while(true){
 
     if(digitalRead(doorHallPin) == LOW){
-      Serial.println("Espera balanceo...");
+      Serial.println("Espera balanceo tapa...");
       delay(DELAY_CIERRE);
 
       if(digitalRead(doorHallPin) == LOW){
         digitalWrite(pinLock, HIGH); // Cerrar pestillo
-        Serial.println("Cerrado");
+        Serial.println("Ingreso bloqueado");
         break;
       }
     }
