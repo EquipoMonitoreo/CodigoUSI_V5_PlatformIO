@@ -1,3 +1,8 @@
+/*
+	Se corrige timeout en SIM808.Power.cpp (Funcion powerOnOff).
+
+*/
+
 #pragma once
 
 #include <SIMComAT.h>
@@ -6,6 +11,8 @@
 #define HTTP_TIMEOUT 10000L
 #define GPS_ACCURATE_FIX_MIN_SATELLITES 4
 #define SIM808_UNAVAILABLE_PIN 255
+
+#define POWER_TIMEOUT	200				// Time out funcion powerOnOff (200 == 3.5 min aprox)
 
 class SIM808 : public SIMComAT
 {

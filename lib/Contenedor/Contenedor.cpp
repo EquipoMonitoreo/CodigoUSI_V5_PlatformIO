@@ -55,9 +55,16 @@ bool Contenedor::SIM_Initialize()
 
   inSerial->println("Encendiendo...");
 
-  //sim808->powerOnOff(sim808->powered()); //borrar linea
+  bool OnOff_status;
 
-  sim808->powerOnOff(true);
+  OnOff_status = sim808->powerOnOff(true);
+  //inSerial->println("OnOffStatus: "); inSerial->println(OnOff_status);
+
+  if(OnOff_status == 0){
+    inSerial->println("ERROR");
+    return 0;
+  }
+
   sim808->init();
   delay(10000);
  

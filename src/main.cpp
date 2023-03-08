@@ -8,6 +8,11 @@
  *  PROBANDO LOS SIGUIENTES CAMBIOS:
  *    - Deteccion de posicion tapa con sensor hall antes de liberar solenoide cerradura. Usando sensor hall A44E con pullup externo (10k)
  *    - Pulsador a pin INT - dentro de subrutina levanta bandera 'flagTouch'
+ *    - Añadido if(simStatus){} en funcion sendAttempt()
+ *    - delay como anti rebote para pulsador inicio
+ *    - cambios menores en pantalla inicio
+ * 
+ * 
  *  
  */
 
@@ -44,8 +49,13 @@ MCUFRIEND_kbv tft;
 
 //------ Configurar touch screen ------
 // max: tp.x = 821, tp.y = 821; min: tp.x = 178, tp.y = 125
-const int XP=8,XM=A2,YP=A3,YM=9; //240x320 ID=0x9341  (valores resultado de calibracion)
-const int TS_LEFT=144,TS_RT=883,TS_TOP=100,TS_BOT=862;  // valores de calibracion
+// const int XP=8,XM=A2,YP=A3,YM=9; //240x320 ID=0x9341  (valores resultado de calibracion)
+// const int TS_LEFT=144,TS_RT=883,TS_TOP=100,TS_BOT=862;  // valores de calibracion
+
+const int XP=7,XM=A1,YP=A2,YM=6; //240x320 ID=0x9341
+const int TS_LEFT=182,TS_RT=966,TS_TOP=212,TS_BOT=933;
+
+//----------------------------------------
 
 uint16_t xpos, ypos;  //screen coordinates
 bool flagTouch = false;
@@ -76,7 +86,7 @@ const byte statusLed = 33;        // Led indicador de estado.
 //Sensor magnetico apertura:
 const byte pinDoor = 19;
 //Sensor Hall tapa ingreso botellas:
-const byte doorHallPin = 27;
+const byte doorHallPin = A14;
 //Pulsador para incio ingreso botellas:
 const byte pulsadorInicio = 18;
 
@@ -112,7 +122,7 @@ bool flagDoor = false;
 bool flagLleno = false;         // Bandera para habilitar pulsador inicio ingreso botellas
 
 //------ Declarar Objetos ------
-NewPing sonar(pinUS_trigger, pinUS_echo, 200);
+NewPing sonar(pinUS_trigger, pinUS_echo, MAX_DISTANCE);
 SoftwareSerial SIM(pin_Rx, pin_Tx);
 SIM808 sim808(RST, PWR);
 Contenedor ambiente(&sim808, &SIM, URLString, Serial);      // Crea objeto 'ambiente' de la clase Contenedor.
@@ -395,14 +405,19 @@ bool sendAttempt(){
 
   bool result;
 
-  Serial.print("Enviando datos a: "); Serial.println(URLString);    // Enviar datos.
-  ambiente.updateDate();                                            // Actualizar fecha y hora.
-  Serial.println(ambiente.timeStamp);                               // Mostrar estampa de tiempo actualizada.
-  result = ambiente.enviarInfo();                                   // Ejecutar envío.
-  Serial.print("Estado Envío: "); Serial.println(result);
+  if(simStatus){
+    Serial.print("Enviando datos a: "); Serial.println(URLString);    // Enviar datos.
+    ambiente.updateDate();                                            // Actualizar fecha y hora.
+    Serial.println(ambiente.timeStamp);                               // Mostrar estampa de tiempo actualizada.
+    result = ambiente.enviarInfo();                                   // Ejecutar envío.
+    Serial.print("Estado Envío: "); Serial.println(result);
 
-  return result;
-  
+    return result;
+  }else{
+
+    return false;
+  }
+
 }
 
 void readClearEEPROM(){
@@ -437,6 +452,8 @@ void readClearEEPROM(){
 
 void closeDoor(){     // Funcion para esperar que la tapa este en posicion antes de bloquear ingreso
 
+uint16_t timeOut = 0;
+
   while(true){
 
     if(digitalRead(doorHallPin) == LOW){
@@ -450,7 +467,13 @@ void closeDoor(){     // Funcion para esperar que la tapa este en posicion antes
       }
     }
 
-    // Añadir time out por si nunca detecta cierre ??? REVISAR! 
+    timeOut++;
+    delay(50);
+
+    if(timeOut > LOCK_TIMEOUT){
+      Serial.println("Time Out cerradura...");
+      break;
+    }
 
   }
   
@@ -502,11 +525,12 @@ void setup() {
   tft.setRotation(3);   // establecer orientacion de pantalla (2 = vertical, 3 = horizontal  180°)
 
   tft.fillScreen(BLACK);
-  showmsgXY(0, 0, 2, NULL, "Iniciando Unidad", GREEN);
-  showmsgXY(0, 30, 2, NULL, "Configurando...", RED);
-  progressBar(0, 60);
+  showmsgXY(60, 0, 2, NULL, "INICIANDO UNIDAD", GREEN);
+  showmsgXY(0, 60, 2, NULL, "Configurando...", GREEN);
+  //progressBar(0, 60);
 
   // Configurando pines:
+  showmsgXY(0, 90, 2, NULL, "-> Pines E/S", GREEN);
   pinMode(pinLock, OUTPUT);                // Ctrl cerradura (solenoide).
   digitalWrite(pinLock, HIGH);            // HIGH = Rele en descanso (Cerrado); LOW = Acciona rele (Abierto)
   
@@ -541,16 +565,20 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(pinIR1), ISR_IR1, RISING);
   //pinMode(pinIR1, INPUT);         // Probando otra logica de deteccion botellas: Si IR1 HIGH y INT RISING cuenta
   attachInterrupt(digitalPinToInterrupt(pinIR2), ISR_IR2, RISING);
-
   attachInterrupt(digitalPinToInterrupt(pinDoor), ISR_Puerta, FALLING);
-
   attachInterrupt(digitalPinToInterrupt(pulsadorInicio), ISR_inicio, FALLING);
 
+  showmsgXY(260, 90, 2, NULL, "OK", GREEN);
+
   // Iniciar SIM808:
+  showmsgXY(0, 120, 2, NULL, "-> SIM808", GREEN);
   Serial.print("Iniciando SIM808...");
   simStatus = ambiente.SIM_Initialize();
   Serial.print("SIM Status: "); Serial.println(simStatus);
   Serial.print("Power Status: "); Serial.println(sim808.powered());
+
+  if(simStatus){showmsgXY(260, 120, 2, NULL, "OK", GREEN);}
+  else{showmsgXY(260, 120, 2, NULL, "ERROR", RED);}
 
   digitalWrite(statusLed, HIGH);
 
@@ -563,18 +591,20 @@ void setup() {
   readClearEEPROM();
 
   // Lectura nivel llenado
-  nivelCm = sonar.convert_cm(sonar.ping_median(10));    //Utilizando libreria NewPing  
-  ambiente.info.nivel=aPorcentaje(nivelCm);
+  nivelCm = sonar.convert_cm(sonar.ping_median(10));    //Utilizando libreria NewPing
+  ambiente.info.nivel = aPorcentaje(nivelCm);
 
-  delay(1000);
-  
-  showmsgXY(0, 90, 2, NULL, "OK", GREEN);
+  //delay(1000);
+  progressBar(0, 180);      // Mostrar barra de progreso. Introduce delay de 2 Seg.
+  //showmsgXY(0, 90, 2, NULL, "OK", GREEN);
 
   pantallaPrincipal(ambiente.info.nivel, ambiente.info.cantBotellas, simStatus);
 
   lastTimeBlink = millis();
 
   digitalWrite(pinLedVerde, LOW);     // Encender Led verde
+
+  flagTouch = false;
 
   Serial.println("Setup OK");
 
@@ -599,7 +629,8 @@ void loop() {
   }
 
   if(flagTouch && !flagShowCode){
-    flagTouch = false;
+
+    //flagTouch = false;
     Serial.println("Ingreso de botellas iniciado");
     
     pantallaFin();    // Mostrar pantalla contador y finalizacion ingreso
@@ -618,6 +649,9 @@ void loop() {
     bottleFlag = false;
     
     contBotellas = 0;
+
+    delay(200);                 // Delay anti rebote
+    flagTouch = false;
     
     while(true){
 
@@ -682,17 +716,14 @@ void loop() {
       }
 
       if(flagTouch){                    // Finalizar ingreso
-        flagTouch = false;
+
+        //flagTouch = false;      //agregado al final del if
         Serial.println("Ingreso finalizado");
 
         // Detener Timer.
         Timer3.stop();
         Serial.println("Timer Stop");
         timerCount = 0;   // Reset timer
-
-        // Generar codigo beneficio utilizando contBotellas
-        //Serial.println("Generando codigo...");
-        //codeGenerator(contBotellas);
 
         // Actualizar nivel llenado
         nivelCm = sonar.convert_cm(sonar.ping_median(10));  
@@ -728,7 +759,7 @@ void loop() {
         closeDoor();
 
         // Realizar intento de envio GPRS
-        //estadoEnvio = sendAttempt();
+        estadoEnvio = sendAttempt();
 
         // Chequear si intento no fue exitoso habilitar intentos posteriores
         if (estadoEnvio == false){
@@ -745,6 +776,8 @@ void loop() {
           Serial.println(ambiente.info.nivel);
           Serial.println(ambiente.info.cantBotellas);
         }
+
+        flagTouch = false;
         
         break;
       }
@@ -764,11 +797,14 @@ void loop() {
     }
   
     if(flagTouch){
-      flagTouch = false;
+      //flagTouch = false;
       flagShowCode = false;
-      Timer3.stop();      // Detener timer.
+      Timer3.stop();              // Detener timer.
       Serial.println("Timer Stop");
       pantallaPrincipal(ambiente.info.nivel, ambiente.info.cantBotellas, simStatus);   // Regresar a pantalla principal.
+
+      delay(200);                 // Delay anti rebote
+      flagTouch = false;
     }
   }
 
@@ -776,7 +812,7 @@ void loop() {
     if(millis() - lastTime >= INTERVALCHECK){
       
       Serial.println("Realizando intento de envio");
-      //estadoEnvio = sendAttempt();    // Iniciar intento de envio GPRS
+      estadoEnvio = sendAttempt();    // Iniciar intento de envio GPRS
 
       if (estadoEnvio == false){
         Serial.println("Error al enviar datos");
@@ -803,14 +839,14 @@ void loop() {
       pantallaResetSIM(); // Mostrar msj por pantalla 
 
       Serial.println("Apagando SIM808...");
-      //Serial.print("Disable Gprs: "); Serial.println(sim808.disableGprs());
-      //sim808.powerOnOff(false);
-      //Serial.print("Power Status: "); Serial.println(sim808.powered());
+      Serial.print("Disable Gprs: "); Serial.println(sim808.disableGprs());
+      sim808.powerOnOff(false);
+      Serial.print("Power Status: "); Serial.println(sim808.powered());
       
       delay(10000); // Espera 10 seg.
       
       Serial.print("Iniciando SIM808...");
-      //simStatus = ambiente.SIM_Initialize();                      // Llama a metodo de inicializacion
+      simStatus = ambiente.SIM_Initialize();                      // Llama a metodo de inicializacion
       Serial.print("GPRS Status: "); Serial.println(simStatus);
 
       pantallaPrincipal(ambiente.info.nivel, ambiente.info.cantBotellas, simStatus);   // Regresar a pantalla principal.

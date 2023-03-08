@@ -30,12 +30,18 @@ bool SIM808::powerOnOff(bool power)
 	delay(2000);
 	digitalWrite(_pwrKeyPin, LOW);
 
-	uint16_t timeout = 2000;
+	//uint16_t timeout = 2000;
+	uint16_t timeout = 0;
+
 	do {
-		delay(150);
-		timeout -= 150;
+		delay(50);
+		//timeout -= 150;
+		timeout++;
 		currentlyPowered = powered();
-	} while(currentlyPowered != power && timeout > 0);
+		//Serial.print("timeout: "); Serial.println(timeout);
+		//Serial.print("currentlyPowered: "); Serial.println(currentlyPowered);
+		//Serial.println();
+	} while(currentlyPowered != power && timeout < POWER_TIMEOUT);
 
 	return currentlyPowered == power;
 }

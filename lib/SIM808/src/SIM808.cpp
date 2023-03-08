@@ -25,6 +25,8 @@ SIM808::~SIM808() { }
 
 void SIM808::init()
 {
+	Serial.println("Dentro de func init()");
+
 	SIM808_PRINT_SIMPLE_P("Init...");
 
 	reset();
